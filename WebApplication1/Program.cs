@@ -1,4 +1,6 @@
 using WebApplication1;
+using FluentValidation;
+using FluentValidation.Results;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -8,9 +10,8 @@ builder.Services.AddDbContext<WarehouseDbContext>(options =>
 
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
-
+builder.Services.AddValidatorsFromAssemblyContaining<ProductValidators>();
 var app = builder.Build();
-
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
@@ -18,21 +19,23 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
-
-app.MapGet("/products", async (WarehouseDbContext db) =>
-{
-    var product = await db.Products.ToListAsync();
-    return Results.Ok(product);
-});
-
-app.MapGet("/products/{id:guid}", async (Guid id, WarehouseDbContext db) =>
+     app.MapGet("/products", async (WarehouseDbContext db) =>
+     {
+         var product = await db.Products.ToListAsync();
+         return Results.Ok(product);
+     });
+app.MapGet("/products/{id:guid}", async (Guid id,WarehouseDbContext db) =>
 {
     var product = await db.Products.FindAsync(id);
     return product is not null ? Results.Ok(product) : Results.NotFound();
 });
-
-app.MapPost("/products", async (CreateProductDto dto, WarehouseDbContext db) =>
+app.MapPost("/products", async (CreateProductDto dto,WarehouseDbContext db, ProductValidators vd) =>
 {
+    var valid = await vd.ValidateAsync(dto);
+    if (!valid.IsValid)
+    {
+        return Results.ValidationProblem(valid.ToDictionary());
+    }
     var newProduct = new Product()
     {
         Id = Guid.NewGuid(),
@@ -41,13 +44,13 @@ app.MapPost("/products", async (CreateProductDto dto, WarehouseDbContext db) =>
         Price = dto.Price,
         Quantity = dto.QuantityInStock,
         CreatedAt = DateTime.UtcNow
+        
     };
     db.Products.Add(newProduct);
     await db.SaveChangesAsync();
     return Results.Created($"/products/{newProduct.Id}", newProduct);
 });
-
-app.MapDelete("/products/{id:guid}", async (Guid id, WarehouseDbContext db) =>
+app.MapDelete("/products/{id:guid}", async (Guid id,WarehouseDbContext db) =>
 {
     var product = await db.Products.FindAsync(id);
 
@@ -55,13 +58,12 @@ app.MapDelete("/products/{id:guid}", async (Guid id, WarehouseDbContext db) =>
     {
         return Results.NotFound();
     }
-
+ 
     db.Products.Remove(product);
     await db.SaveChangesAsync();
     return Results.Ok(product);
 });
-
-app.MapPut("/product/{id:guid}", async (UpdateProductDto dto, Guid id, WarehouseDbContext db) =>
+app.MapPut("/product/{id:guid}", async (UpdateProductDto dto,Guid id, WarehouseDbContext db) =>
 {
     var product = await db.Products.FindAsync(id);
     if (product is null)
@@ -76,5 +78,4 @@ app.MapPut("/product/{id:guid}", async (UpdateProductDto dto, Guid id, Warehouse
     await db.SaveChangesAsync();
     return Results.Ok(product);
 });
-
 app.Run();
