@@ -81,4 +81,28 @@ app.MapPut("/product/{id:guid}", async (UpdateProductDto dto,Guid id, WarehouseD
     await db.SaveChangesAsync();
     return Results.Ok(product);
 });
+app.MapPost("/auth/register", async (RegisterUserDto dto, WarehouseDbContext db) =>
+{
+    var emailExist = await db.Users.AnyAsync(u => u.Email == dto.Email);
+    if (emailExist)
+    {
+        return Results.Conflict(new { message = "A user with this email address already exists." });
+    }
+
+    var passHash = BCrypt.Net.BCrypt.HashPassword(dto.Password);
+    var user = new User
+    {
+        Id = Guid.NewGuid(),
+        Email = dto.Email,
+        PasswordHash = passHash,
+        CreatedAt = DateTime.UtcNow
+    };
+    db.Users.Add(user);
+    await db.SaveChangesAsync();
+    var response = new UserResponseDto(user.Id, user.Email, user.CreatedAt);
+    return Results.Created($"/users/{user.Id}", response);
+
+
+
+});
 app.Run();
