@@ -7,7 +7,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using WebApplication1;
-
+using Microsoft.OpenApi.Models;
 var builder = WebApplication.CreateBuilder(args);
 
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
@@ -15,7 +15,39 @@ builder.Services.AddDbContext<WarehouseDbContext>(options =>
     options.UseSqlServer(connectionString));
 
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
+builder.Services.AddSwaggerGen(options =>
+{ 
+    options.SwaggerDoc("v1", new OpenApiInfo
+    {
+        Title = "Warehouse API",
+        Version = "v1"
+    });
+
+    options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+    {
+        Name = "Authorization",
+        Type = SecuritySchemeType.Http,
+        Scheme = "Bearer",
+        BearerFormat = "JWT",
+        In = ParameterLocation.Header,
+        Description = "Wprowadź token JWT"
+    });
+
+    options.AddSecurityRequirement(new OpenApiSecurityRequirement
+    {
+        {
+            new OpenApiSecurityScheme
+            {
+                Reference = new OpenApiReference
+                {
+                    Type = ReferenceType.SecurityScheme,
+                    Id = "Bearer"
+                }
+            },
+            Array.Empty<string>()
+        }
+    });
+});
 builder.Services.AddValidatorsFromAssemblyContaining<ProductValidators>();
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 builder.Services.AddProblemDetails();
@@ -58,19 +90,18 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
-// --- Endpoints: Produkty ---
 
 app.MapGet("/products", async (WarehouseDbContext db) =>
 {
     var products = await db.Products.ToListAsync();
     return Results.Ok(products);
-});
+}).RequireAuthorization();
 
 app.MapGet("/products/{id:guid}", async (Guid id, WarehouseDbContext db) =>
 {
     var product = await db.Products.FindAsync(id);
     return product is not null ? Results.Ok(product) : Results.NotFound();
-});
+}).RequireAuthorization();
 
 app.MapPost("/products", async (CreateProductDto dto, WarehouseDbContext db, ProductValidators vd) =>
 {
@@ -93,7 +124,7 @@ app.MapPost("/products", async (CreateProductDto dto, WarehouseDbContext db, Pro
     db.Products.Add(newProduct);
     await db.SaveChangesAsync();
     return Results.Created($"/products/{newProduct.Id}", newProduct);
-});
+}).RequireAuthorization();
 
 app.MapPut("/products/{id:guid}", async (Guid id, UpdateProductDto dto, WarehouseDbContext db) =>
 {
@@ -110,7 +141,7 @@ app.MapPut("/products/{id:guid}", async (Guid id, UpdateProductDto dto, Warehous
 
     await db.SaveChangesAsync();
     return Results.Ok(product);
-});
+}).RequireAuthorization();
 
 app.MapDelete("/products/{id:guid}", async (Guid id, WarehouseDbContext db) =>
 {
@@ -123,7 +154,7 @@ app.MapDelete("/products/{id:guid}", async (Guid id, WarehouseDbContext db) =>
     db.Products.Remove(product);
     await db.SaveChangesAsync();
     return Results.Ok(product);
-});
+}).RequireAuthorization();
 
 
 app.MapPost("/api/auth/register", async (RegisterUserDto dto, WarehouseDbContext db) =>
