@@ -1,0 +1,33 @@
+﻿version: '3.8'
+services:
+  warehouse-db:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: warehouse-db
+    user: "0:0"
+    environment:
+      - ACCEPT_EULA=Y
+      - MSSQL_SA_PASSWORD=Strong@Pass123!
+    ports:
+      - "1433:1433"
+    volumes:
+      - mssql_data:/var/opt/mssql/data
+    
+  warehouse-api:
+    build:
+      context: .
+      dockerfile: WebApplication1/Dockerfile
+    container_name:  warehouse-api
+    ports:
+      - "5000:8080"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ConnectionStrings__DefaultConnection=Server=warehouse-db;Database=WarehouseDb;User Id=sa;Password=Strong@Pass123!;TrustServerCertificate=True;
+      - JwtSettings__SecretKey=SuperSecretKeyForDevelopmentWarehouseApi123456!
+      - JwtSettings__Issuer=WarehouseApi
+      - JwtSettings__Audience=WarehouseClient
+      - JwtSettings__ExpiresInMinutes=60
+    depends_on:
+      - warehouse-db
+volumes:
+  mssql_data:
+
